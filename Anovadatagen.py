@@ -5,7 +5,9 @@ import numpy as np
 import ast
 
 # Assuming response_time function is defined as provided
-def response_time(dff, expnum=1):
+np.random.seed(42)
+
+def response_time(dff):
     extracted_data = dff[['stim_duration', 'stim', 'coded_response', 'exp_stage', 'trial_num', 'stim_rating']]
     extracted_data = extracted_data.dropna(subset=['trial_num', 'stim_rating'])
     extracted_data[['taste', 'health']] = extracted_data['stim_rating'].apply(lambda x: pd.Series(ast.literal_eval(x)))
@@ -16,61 +18,84 @@ def response_time(dff, expnum=1):
     extracted_data['health'] = extracted_data['health'].astype(int)
     extracted_data['taste'] = extracted_data['taste'].apply(lambda x: np.random.choice([-1, 1]) if x == 0 else x)
     extracted_data['health'] = extracted_data['health'].apply(lambda x: np.random.choice([-1, 1]) if x == 0 else x)
+    
+    # Filters based on taste and health conditions
+    filter1 = (extracted_data['taste'] < 0) & (extracted_data['health'] < 0)
+    filter2 = (extracted_data['taste'] < 0) & (extracted_data['health'] > 0)
+    filter3 = (extracted_data['taste'] > 0) & (extracted_data['health'] < 0)
+    filter4 = (extracted_data['taste'] > 0) & (extracted_data['health'] > 0)
 
-    if expnum == 1:
-        filtered_df = extracted_data[(extracted_data['taste'] < 0) & (extracted_data['health'] < 0)]
-        return filtered_df['stim_duration']
-    elif expnum == 2:
-        filtered_df = extracted_data[(extracted_data['taste'] < 0) & (extracted_data['health'] > 0)]
-        return filtered_df['stim_duration']
-    elif expnum == 3:
-        filtered_df = extracted_data[(extracted_data['taste'] > 0) & (extracted_data['health'] < 0)]
-        return filtered_df['stim_duration']
-    elif expnum == 4:
-        filtered_df = extracted_data[(extracted_data['taste'] > 0) & (extracted_data['health'] > 0)]
-        return filtered_df['stim_duration']
+    # Return stim_duration for each filter
+    return [
+        extracted_data[filter1]['stim_duration'],
+        extracted_data[filter2]['stim_duration'],
+        extracted_data[filter3]['stim_duration'],
+        extracted_data[filter4]['stim_duration']
+    ]
 
 # Define directories
 base_dir = "Experiment-Data"
 non_self_controlled_dir = os.path.join(base_dir, "Non-Self-Controlled")
 self_controlled_dir = os.path.join(base_dir, "Self-Controlled")
-anova_dir = os.path.join(base_dir, "ANOVA")
+anova_dir = os.path.join(base_dir, "ANOVA2")
 
 # Create ANOVA directory if it doesn't exist
 os.makedirs(anova_dir, exist_ok=True)
 
-# Helper function to load stim_duration for all CSVs in a directory
-def load_stim_duration(directory, expnum=1):
-    stim_durations = []
+# Helper function to load stim_duration for all CSVs in a directory and return all results for all experiments
+def load_all_stim_durations(directory):
+    all_stim_durations = {
+        'filter1': [],
+        'filter2': [],
+        'filter3': [],
+        'filter4': []
+    }
+    
+    # Loop through all files in the directory
     for file_name in os.listdir(directory):
-        if file_name.endswith('.csv'):  # Check if the file is a CSV
+        if file_name.endswith('.csv'):
             file_path = os.path.join(directory, file_name)
-            df = pd.read_csv(file_path)  # Load CSV into DataFrame
-            stim_duration = response_time(df, expnum=expnum)  # Get stim_duration using response_time
-            stim_durations.append(stim_duration)
-    return pd.concat(stim_durations, ignore_index=True)  # Combine all stim_duration into one Series
+            df = pd.read_csv(file_path)
+            filter_results = response_time(df)  # Get the stim_duration values based on the filters
+            
+            # Append stim_duration for each filter to the corresponding list
+            all_stim_durations['filter1'].append(filter_results[0])
+            all_stim_durations['filter2'].append(filter_results[1])
+            all_stim_durations['filter3'].append(filter_results[2])
+            all_stim_durations['filter4'].append(filter_results[3])
+    
+    # Combine all stim_duration lists into a single series per filter
+    all_stim_durations = {k: pd.concat(v, ignore_index=True) for k, v in all_stim_durations.items()}
+    
+    return all_stim_durations
 
-# Function to save stim_duration DataFrame for each expnum
-def save_stim_duration(expnum):
-    non_self_controlled_stim_duration = load_stim_duration(non_self_controlled_dir, expnum=expnum)
-    self_controlled_stim_duration = load_stim_duration(self_controlled_dir, expnum=expnum)
+# Function to save combined stim_duration DataFrame with self-controlled and non-self-controlled
+def save_combined_stim_duration():
+    # Load stim_duration for both directories
+    non_self_controlled_stim_durations = load_all_stim_durations(non_self_controlled_dir)
+    self_controlled_stim_durations = load_all_stim_durations(self_controlled_dir)
+    
+    # Iterate over the filters (exp1 to exp4)
+    for expnum in range(1, 5):
+        # Extract the appropriate filter for the experiment (expnum - 1 maps to filter1, filter2, etc.)
+        non_self_controlled_stim_duration = non_self_controlled_stim_durations[f'filter{expnum}']
+        self_controlled_stim_duration = self_controlled_stim_durations[f'filter{expnum}']
+        
+        # Create DataFrame with two columns: 'self_controlled' and 'non_self_controlled'
+        combined_df = pd.DataFrame({
+            'self_controlled': self_controlled_stim_duration,
+            'non_self_controlled': non_self_controlled_stim_duration
+        })
 
-    # Create DataFrames
-    non_self_controlled_df = pd.DataFrame(non_self_controlled_stim_duration, columns=['stim_duration'])
-    self_controlled_df = pd.DataFrame(self_controlled_stim_duration, columns=['stim_duration'])
+        # Define file name for the combined CSV
+        combined_file = os.path.join(anova_dir, f"Combined_Stim_Duration_Exp{expnum}.csv")
 
-    # Define file names
-    non_self_controlled_file = os.path.join(anova_dir, f"Non_Self_Controlled_Stim_Duration_Exp{expnum}.csv")
-    self_controlled_file = os.path.join(anova_dir, f"Self_Controlled_Stim_Duration_Exp{expnum}.csv")
+        # Save the DataFrame to CSV
+        combined_df.to_csv(combined_file, index=False)
 
-    # Save CSVs
-    non_self_controlled_df.to_csv(non_self_controlled_file, index=False)
-    self_controlled_df.to_csv(self_controlled_file, index=False)
+        print(f"Exp {expnum}: Combined DataFrame saved to ANOVA directory.")
 
-    print(f"Exp {expnum}: DataFrames saved to ANOVA directory.")
-
-# Save stim_duration for all expnums (1 to 4)
-for expnum in range(1, 5):
-    save_stim_duration(expnum)
+# Run the function to save combined stim_duration for all experiments
+save_combined_stim_duration()
 
 # %%
