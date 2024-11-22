@@ -81,12 +81,21 @@ def save_combined_stim_duration():
         non_self_controlled_stim_duration = non_self_controlled_stim_durations[f'filter{expnum}']
         self_controlled_stim_duration = self_controlled_stim_durations[f'filter{expnum}']
         
-        # Create DataFrame with two columns: 'self_controlled' and 'non_self_controlled'
-        combined_df = pd.DataFrame({
-            'self_controlled': self_controlled_stim_duration,
-            'non_self_controlled': non_self_controlled_stim_duration
+        # Create a combined DataFrame with one column for stim_duration
+        # and another column 'category' to indicate the group it came from
+        non_self_controlled_df = pd.DataFrame({
+            'stim_duration': non_self_controlled_stim_duration,
+            'category': ['non-self-control'] * len(non_self_controlled_stim_duration)
         })
-
+        
+        self_controlled_df = pd.DataFrame({
+            'stim_duration': self_controlled_stim_duration,
+            'category': ['self-control'] * len(self_controlled_stim_duration)
+        })
+        
+        # Combine both DataFrames into one
+        combined_df = pd.concat([non_self_controlled_df, self_controlled_df], ignore_index=True)
+        
         # Define file name for the combined CSV
         combined_file = os.path.join(anova_dir, f"Combined_Stim_Duration_Exp{expnum}.csv")
 
@@ -94,6 +103,7 @@ def save_combined_stim_duration():
         combined_df.to_csv(combined_file, index=False)
 
         print(f"Exp {expnum}: Combined DataFrame saved to ANOVA directory.")
+
 
 # Run the function to save combined stim_duration for all experiments
 save_combined_stim_duration()
