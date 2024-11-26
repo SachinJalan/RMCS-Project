@@ -11,6 +11,7 @@ def response_time(dff):
     # Extract necessary columns
     extracted_data = dff[['stim_duration', 'stim', 'coded_response', 'exp_stage', 'trial_num', 'stim_rating']]
     
+    extracted_data = extracted_data[extracted_data['stim_duration'] != 4000]
     # Drop rows where 'trial_num' or 'stim_rating' have NaN values
     extracted_data = extracted_data.dropna(subset=['trial_num', 'stim_rating'])
     
